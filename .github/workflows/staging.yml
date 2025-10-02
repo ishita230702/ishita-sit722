@@ -1,0 +1,48 @@
+name: Staging Deployment
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]   # 👈 must match the name in ci.yml
+    types:
+      - completed
+
+jobs:
+  deploy-to-staging:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Staging
+        run: |
+          echo "Deploying Docker images to staging environment..."
+          az group create --name sit722-staging-rg --location australiaeast
+          az aks create \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-cluster \
+            --node-count 1 \
+            --enable-addons monitoring \
+            --generate-ssh-keys \
+            --attach-acr sit722acrishita
+          
+          az aks get-credentials --resource-group sit722-staging-rg --name sit722-staging-cluster
+          kubectl apply -f k8s/
+
+      - name: Run Acceptance Tests
+        run: |
+          echo "Running simple smoke tests..."
+          kubectl get pods
+          kubectl get services
+
+      - name: Destroy Staging Environment
+        if: always()
+        run: |
+          echo "Cleaning up staging environment..."
+          az group delete --name sit722-staging-rg --yes --no-wait
