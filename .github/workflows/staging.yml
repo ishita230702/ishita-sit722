@@ -2,7 +2,7 @@ name: Staging Deployment
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]   # must match the name in ci.yml
+    workflows: ["CI Pipeline"]   # must match your CI pipeline name
     types:
       - completed
 
@@ -20,25 +20,44 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Staging
+      - name: Deploy to Staging Cluster
         run: |
           echo "Deploying Docker images to staging environment..."
+
+          # Create staging RG
           az group create --name sit722-staging-rg --location australiaeast
+
+          # Create AKS cluster (no --attach-acr here)
           az aks create \
             --resource-group sit722-staging-rg \
             --name sit722-staging-cluster \
             --node-count 1 \
             --node-vm-size Standard_B2s \
-            --generate-ssh-keys \
-            --attach-acr sit722acrishita
-          
+            --generate-ssh-keys
+
+          # Grant ACR Pull access manually
+          CLIENT_ID=$(az aks show \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-cluster \
+            --query "identityProfile.kubeletidentity.clientId" -o tsv)
+
+          ACR_ID=$(az acr show --name sit722acrishita --query id -o tsv)
+
+          az role assignment create \
+            --assignee $CLIENT_ID \
+            --role AcrPull \
+            --scope $ACR_ID
+
+          # Connect kubectl
           az aks get-credentials --resource-group sit722-staging-rg --name sit722-staging-cluster
+
+          # Apply Kubernetes manifests
           kubectl apply -f k8s/
 
       - name: Run Acceptance Tests
         run: |
           echo "Running simple smoke tests..."
-          kubectl get pods
+          kubectl get pods -o wide
           kubectl get services
 
       - name: Destroy Staging Environment
@@ -46,4 +65,3 @@ jobs:
         run: |
           echo "Cleaning up staging environment..."
           az group delete --name sit722-staging-rg --yes --no-wait
-
