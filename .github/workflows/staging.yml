@@ -2,7 +2,7 @@ name: Staging Deployment
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]   # 👈 must match the name in ci.yml
+    workflows: ["CI Pipeline"]   # Must match the name in ci.yml
     types:
       - completed
 
@@ -28,7 +28,6 @@ jobs:
             --resource-group sit722-staging-rg \
             --name sit722-staging-cluster \
             --node-count 1 \
-            --enable-addons monitoring \
             --generate-ssh-keys \
             --attach-acr sit722acrishita
           
