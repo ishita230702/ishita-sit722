@@ -17,13 +17,15 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get AKS credentials (ignore missing RG)
+      # ---------------- BUILD & PUSH TO ACR ----------------
+      - name: Build and Push Docker images
         run: |
-          az aks get-credentials \
-            --resource-group sit722-prod-rg \
-            --name sit722-prod-cluster \
-            --overwrite-existing || echo "Skipping prod deploy (RG/Cluster not found)"
+          az acr build --registry sit722acrishita \
+                       --image myapp:${{ github.sha }} .
 
-      - name: Deploy manifests to AKS (ignore if cluster missing)
-        run: |
-          kubectl apply -f k8s/ || echo "Skipping prod apply (no cluster)"
+      # ---------------- DEPLOY TO EXISTING PROD ----------------
+      - name: Get AKS credentials
+        run: az aks get-credentials -g sit722-prod-rg -n sit722-prod-cluster --overwrite-existing || echo "Prod cluster not found, skipping..."
+
+      - name: Deploy manifests
+        run: kubectl apply -f k8s/ || echo "Skipping deploy since prod cluster is missing"
