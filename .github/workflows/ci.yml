@@ -1,12 +1,13 @@
-name: CI Pipeline - Build and Push to ACR
+name: CI Pipeline
 
 on:
   push:
-    branches:
-      - testing
+    branches: [ "testing", "main" ]
+  pull_request:
+    branches: [ "testing", "main" ]
 
 jobs:
-  build-test-push:
+  build-and-test:
     runs-on: ubuntu-latest
 
     services:
@@ -24,54 +25,38 @@ jobs:
           --health-retries=5
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Install test dependencies
-      run: |
-        pip install -r backend/customer_service/requirements-dev.txt
-        pip install -r backend/order_service/requirements-dev.txt
-        pip install -r backend/product_service/requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          pip install -r backend/customer_service/requirements.txt
+          pip install -r backend/order_service/requirements.txt
+          pip install -r backend/product_service/requirements.txt
 
-    - name: Initialize PostgreSQL databases
-      run: |
-        sudo apt-get install -y postgresql-client
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE customers;"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE orders;"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE products;"
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -U postgres; do
+            echo "Waiting for postgres..."
+            sleep 3
+          done
 
-    - name: Run backend tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/customers
-      run: |
-        pytest backend/customer_service/tests
-        pytest backend/order_service/tests
-        pytest backend/product_service/tests
+      - name: Create test databases
+        run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE customers;"
+          psql -h localhost -U postgres -c "CREATE DATABASE orders;"
+          psql -h localhost -U postgres -c "CREATE DATABASE products;"
 
-    - name: Log in to ACR
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+      - name: Run Customer Service tests
+        run: pytest backend/customer_service/tests
 
-    - name: Build and Push Customer Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest ./backend/customer_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest
+      - name: Run Order Service tests
+        run: pytest backend/order_service/tests
 
-    - name: Build and Push Order Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest ./backend/order_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest
-
-    - name: Build and Push Product Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest ./backend/product_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest
-
-    - name: Build and Push Frontend
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./frontend
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
+      - name: Run Product Service tests
+        run: pytest backend/product_service/tests
