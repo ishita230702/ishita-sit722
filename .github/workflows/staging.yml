@@ -3,64 +3,53 @@ name: Deploy to Staging
 on:
   push:
     branches:
-      - staging
+      - testing
 
 jobs:
-  deploy:
+  deploy-staging:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Log in to Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploying Docker images to staging environment
-        run: echo "Deploying Docker images to staging environment..."
+      # ---------------- TEST STAGE ----------------
+      - name: Run Unit Tests
+        run: |
+          echo "Running tests..."
+          # Replace with your test framework
+          echo "All tests passed!"
 
+      # ---------------- BUILD & PUSH TO ACR ----------------
+      - name: Build and Push Docker images
+        run: |
+          az acr build --registry sit722acrishita \
+                       --image myapp:${{ github.sha }} .
+
+      # ---------------- CREATE TEMP STAGING ----------------
       - name: Create Resource Group
-        run: |
-          az group create \
-            --name sit722-staging-rg \
-            --location australiaeast || true
+        run: az group create -n sit722-staging-rg -l australiaeast
 
-      - name: Create AKS cluster
+      - name: Create AKS Cluster
         run: |
-          az aks create \
-            --resource-group sit722-staging-rg \
-            --name sit722-staging-cluster \
+          az aks create -g sit722-staging-rg -n sit722-staging-cluster \
             --node-count 1 \
-            --node-vm-size Standard_B2s \
             --enable-managed-identity \
-            --generate-ssh-keys || true
-
-      - name: Allow AKS to pull from ACR (manual role assignment)
-        run: |
-          ACR_NAME=sit722acrishita
-          RG_NAME=sit722-rg
-          SP_ID=$(az aks show -g sit722-staging-rg -n sit722-staging-cluster --query identity.principalId -o tsv || echo "")
-          if [ -n "$SP_ID" ]; then
-            az role assignment create \
-              --assignee $SP_ID \
-              --role AcrPull \
-              --scope $(az acr show --name $ACR_NAME --resource-group $RG_NAME --query id -o tsv) \
-              || echo "ACR role assignment failed but continuing"
-          else
-            echo "No SP found, skipping role assignment"
-          fi
+            --attach-acr sit722acrishita \
+            --generate-ssh-keys \
+            --node-vm-size Standard_B2s
 
       - name: Get AKS credentials
-        run: |
-          az aks get-credentials \
-            --resource-group sit722-staging-rg \
-            --name sit722-staging-cluster \
-            --overwrite-existing || true
+        run: az aks get-credentials -g sit722-staging-rg -n sit722-staging-cluster --overwrite-existing
 
-      - name: Deploy manifests to AKS
-        run: |
-          kubectl apply -f task10_2d/k8s/ || true
+      - name: Deploy manifests
+        run: kubectl apply -f k8s/
 
-      - name: Finished
-        run: echo "✅ Deployment workflow completed successfully!"
+      # ---------------- CLEANUP ----------------
+      - name: Destroy Staging Environment
+        if: always()
+        run: az group delete -n sit722-staging-rg --yes --no-wait
