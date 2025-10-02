@@ -29,6 +29,7 @@ jobs:
             --name sit722-staging-cluster \
             --node-count 1 \
             --vm-set-type VirtualMachineScaleSets \
+            --vm-size Standard_B2s \  
             --generate-ssh-keys \
             --attach-acr sit722acrishita
 
