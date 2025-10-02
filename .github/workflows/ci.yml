@@ -7,7 +7,7 @@ on:
     branches: [ "testing" ]
 
 jobs:
-  build-and-test:
+  build-test-and-push:
     runs-on: ubuntu-latest
 
     services:
@@ -33,21 +33,23 @@ jobs:
         with:
           python-version: "3.9"
 
-      - name: Install dependencies (Customer Service)
+      # Install deps & run tests for each service
+      - name: Install dependencies & run tests (Customer Service)
         run: |
           pip install -r backend/customer_service/requirements.txt
-          pip install pytest
+          pytest backend/customer_service/tests
 
-      - name: Install dependencies (Order Service)
+      - name: Install dependencies & run tests (Order Service)
         run: |
           pip install -r backend/order_service/requirements.txt
-          pip install pytest
+          pytest backend/order_service/tests
 
-      - name: Install dependencies (Product Service)
+      - name: Install dependencies & run tests (Product Service)
         run: |
           pip install -r backend/product_service/requirements.txt
-          pip install pytest
+          pytest backend/product_service/tests
 
+      # Ensure DBs exist for tests
       - name: Ensure test databases exist
         run: |
           sudo apt-get install -y postgresql-client
@@ -57,33 +59,25 @@ jobs:
         env:
           PGPASSWORD: postgres
 
-      - name: Run Customer Service tests
-        run: pytest backend/customer_service/tests
-
-      - name: Run Order Service tests
-        run: pytest backend/order_service/tests
-
-      - name: Run Product Service tests
-        run: pytest backend/product_service/tests
-
-      # --- Only run if tests succeed ---
-      - name: Log in to Azure
-        if: success()
+      # Login to Azure using GitHub secret
+      - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Log in to ACR
-        if: success()
-        run: az acr login --name ${{ secrets.ACR_NAME }}
-
-      - name: Build and Push Docker Images
-        if: success()
+      # Login to ACR
+      - name: Azure Container Registry Login
         run: |
-          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/customer-service:${{ github.sha }} ./backend/customer_service
-          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/order-service:${{ github.sha }} ./backend/order_service
-          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/product-service:${{ github.sha }} ./backend/product_service
+          az acr login --name sit722acr09ishita2505
 
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/customer-service:${{ github.sha }}
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/order-service:${{ github.sha }}
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/product-service:${{ github.sha }}
+      # Build & push images
+      - name: Build and Push Docker Images
+        run: |
+          docker build -t sit722acr09ishita2505.azurecr.io/customer-service:latest backend/customer_service
+          docker push sit722acr09ishita2505.azurecr.io/customer-service:latest
+
+          docker build -t sit722acr09ishita2505.azurecr.io/order-service:latest backend/order_service
+          docker push sit722acr09ishita2505.azurecr.io/order-service:latest
+
+          docker build -t sit722acr09ishita2505.azurecr.io/product-service:latest backend/product_service
+          docker push sit722acr09ishita2505.azurecr.io/product-service:latest
