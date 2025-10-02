@@ -65,3 +65,25 @@ jobs:
 
       - name: Run Product Service tests
         run: pytest backend/product_service/tests
+
+      # --- Only run if tests succeed ---
+      - name: Log in to Azure
+        if: success()
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        if: success()
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build and Push Docker Images
+        if: success()
+        run: |
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/customer-service:${{ github.sha }} ./backend/customer_service
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/order-service:${{ github.sha }} ./backend/order_service
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/product-service:${{ github.sha }} ./backend/product_service
+
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/customer-service:${{ github.sha }}
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/order-service:${{ github.sha }}
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/product-service:${{ github.sha }}
