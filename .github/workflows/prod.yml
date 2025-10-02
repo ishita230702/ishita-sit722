@@ -1,0 +1,22 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    env:
+      RG: ${{ secrets.RESOURCE_GROUP }}
+      AKS: ${{ secrets.AKS_NAME }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az aks get-credentials -g $RG -n $AKS --overwrite-existing
+      - run: |
+          kubectl apply -f k8s/
+          kubectl get pods
+          kubectl get svc
