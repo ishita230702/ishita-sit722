@@ -74,16 +74,16 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-          
-      # ✅ Build & Push Docker Images
+
+      # ✅ Build & Push Docker Images to Correct ACR
       - name: Build and Push Docker images
         run: |
-          az acr login --name sit722acr09ishita2505
-          docker build -t sit722acr09ishita2505.azurecr.io/customer-service:latest backend/customer_service
-          docker build -t sit722acr09ishita2505.azurecr.io/order-service:latest backend/order_service
-          docker build -t sit722acr09ishita2505.azurecr.io/product-service:latest backend/product_service
-          docker build -t sit722acr09ishita2505.azurecr.io/frontend:latest frontend
-          docker push sit722acr09ishita2505.azurecr.io/customer-service:latest
-          docker push sit722acr09ishita2505.azurecr.io/order-service:latest
-          docker push sit722acr09ishita2505.azurecr.io/product-service:latest
-          docker push sit722acr09ishita2505.azurecr.io/frontend:latest
+          az acr login --name sit722acrishita
+          docker build -t sit722acrishita.azurecr.io/customer-service:latest backend/customer_service
+          docker build -t sit722acrishita.azurecr.io/order-service:latest backend/order_service
+          docker build -t sit722acrishita.azurecr.io/product-service:latest backend/product_service
+          docker build -t sit722acrishita.azurecr.io/frontend:latest frontend
+          docker push sit722acrishita.azurecr.io/customer-service:latest
+          docker push sit722acrishita.azurecr.io/order-service:latest
+          docker push sit722acrishita.azurecr.io/product-service:latest
+          docker push sit722acrishita.azurecr.io/frontend:latest
