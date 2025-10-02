@@ -2,7 +2,7 @@ name: Staging Deployment
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]   # Must match CI workflow name
+    workflows: ["CI Pipeline"]   # must match your CI workflow name
     types:
       - completed
 
@@ -30,8 +30,7 @@ jobs:
             --node-count 1 \
             --generate-ssh-keys \
             --attach-acr sit722acrishita \
-            --enable-managed-identity \
-            --disable-monitoring
+            --enable-managed-identity
           
           az aks get-credentials --resource-group sit722-staging-rg --name sit722-staging-cluster
           kubectl apply -f k8s/
