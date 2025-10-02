@@ -28,6 +28,7 @@ jobs:
             --resource-group sit722-staging-rg \
             --name sit722-staging-cluster \
             --node-count 1 \
+            --node-vm-size Standard_B2s \
             --generate-ssh-keys \
             --attach-acr sit722acrishita \
             --enable-managed-identity
