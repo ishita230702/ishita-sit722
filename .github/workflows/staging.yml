@@ -2,7 +2,7 @@ name: Staging Deployment
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]   # 👈 must match the name in ci.yml
+    workflows: ["CI Pipeline"]   # must match the name in ci.yml
     types:
       - completed
 
@@ -28,12 +28,11 @@ jobs:
             --resource-group sit722-staging-rg \
             --name sit722-staging-cluster \
             --node-count 1 \
-            --generate-ssh-keys
+            --node-vm-size Standard_B2s \
+            --generate-ssh-keys \
+            --attach-acr sit722acrishita
           
-          # Get kubeconfig for the new cluster
           az aks get-credentials --resource-group sit722-staging-rg --name sit722-staging-cluster
-          
-          # Apply manifests (assuming k8s/ has your deployment + service YAMLs)
           kubectl apply -f k8s/
 
       - name: Run Acceptance Tests
@@ -47,3 +46,4 @@ jobs:
         run: |
           echo "Cleaning up staging environment..."
           az group delete --name sit722-staging-rg --yes --no-wait
+
