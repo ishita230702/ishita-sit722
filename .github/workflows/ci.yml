@@ -1,0 +1,57 @@
+name: CI Pipeline - Build and Push to ACR
+
+on:
+  push:
+    branches:
+      - testing   # Trigger only when code is pushed to 'testing' branch
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Setup Python for backend tests
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install test dependencies
+      run: |
+        pip install -r backend/customer_service/requirements-dev.txt
+        pip install -r backend/order_service/requirements-dev.txt
+        pip install -r backend/product_service/requirements-dev.txt
+
+    - name: Run tests
+      run: |
+        pytest backend/customer_service/tests
+        pytest backend/order_service/tests
+        pytest backend/product_service/tests
+
+    # Login to Azure Container Registry (ACR)
+    - name: Log in to ACR
+      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+    # Build & push images
+    - name: Build and Push Customer Service
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest ./backend/customer_service
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest
+
+    - name: Build and Push Order Service
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest ./backend/order_service
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest
+
+    - name: Build and Push Product Service
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest ./backend/product_service
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest
+
+    - name: Build and Push Frontend
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./frontend
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
