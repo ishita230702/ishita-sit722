@@ -1,13 +1,13 @@
-name: CI
+name: CI Pipeline
 
 on:
   push:
-    branches: [ "main", "testing" ]
+    branches: [ "testing" ]
   pull_request:
-    branches: [ "main", "testing" ]
+    branches: [ "testing" ]
 
 jobs:
-  build-test-push:
+  build-and-test:
     runs-on: ubuntu-latest
 
     services:
@@ -16,7 +16,6 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: customers   # default DB for startup
         ports:
           - 5432:5432
         options: >-
@@ -26,40 +25,43 @@ jobs:
           --health-retries=5
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
 
-    - name: Install dependencies
-      run: |
-        pip install -r backend/customer_service/requirements.txt
-        pip install -r backend/order_service/requirements.txt
-        pip install -r backend/product_service/requirements.txt
-        pip install pytest
+      - name: Install dependencies (Customer Service)
+        run: |
+          pip install -r backend/customer_service/requirements.txt
+          pip install pytest
 
-    - name: Create test databases
-      run: |
-        sudo apt-get install -y postgresql-client
-        # Create missing DBs for all services
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE customers;"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE orders;"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE products;"
+      - name: Install dependencies (Order Service)
+        run: |
+          pip install -r backend/order_service/requirements.txt
+          pip install pytest
 
-    - name: Run Customer Service tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/customers
-      run: pytest backend/customer_service/tests
+      - name: Install dependencies (Product Service)
+        run: |
+          pip install -r backend/product_service/requirements.txt
+          pip install pytest
 
-    - name: Run Order Service tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orders
-      run: pytest backend/order_service/tests
+      - name: Ensure test databases exist
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'customers'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE customers"
+          psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'orders'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE orders"
+          psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'products'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE products"
+        env:
+          PGPASSWORD: postgres
 
-    - name: Run Product Service tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/products
-      run: pytest backend/product_service/tests
+      - name: Run Customer Service tests
+        run: pytest backend/customer_service/tests
+
+      - name: Run Order Service tests
+        run: pytest backend/order_service/tests
+
+      - name: Run Product Service tests
+        run: pytest backend/product_service/tests
