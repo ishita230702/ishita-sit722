@@ -7,16 +7,25 @@ on:
 jobs:
   deploy-prod:
     runs-on: ubuntu-latest
-    env:
-      RG: ${{ secrets.RESOURCE_GROUP }}
-      AKS: ${{ secrets.AKS_NAME }}
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: azure/login@v2
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - run: az aks get-credentials -g $RG -n $AKS --overwrite-existing
-      - run: |
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group sit722-prod-rg \
+            --name sit722-prod-cluster \
+            --overwrite-existing
+
+      - name: Deploy manifests
+        run: |
           kubectl apply -f k8s/
-          kubectl get pods
-          kubectl get svc
+          kubectl get pods -o wide
+          kubectl get svc -o wide
