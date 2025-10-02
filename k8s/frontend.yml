@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: sit722acrishita.azurecr.io/frontend:latest
+          image: sit722acrishita.azurecr.io/task10_2d-frontend:latest
           ports:
             - containerPort: 80
 ---

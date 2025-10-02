@@ -14,9 +14,9 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: sit722acrishita.azurecr.io/order-service:latest   # <-- your ACR image
+          image: sit722acrishita.azurecr.io/task10_2d-order-service:latest
           ports:
-            - containerPort: 8000
+            - containerPort: 8002
           env:
             - name: DATABASE_URL
               value: postgresql://postgres:postgres@postgres:5432/orders
@@ -30,5 +30,5 @@ spec:
   selector:
     app: order-service
   ports:
-    - port: 8000
-      targetPort: 8000
+    - port: 8002
+      targetPort: 8002
