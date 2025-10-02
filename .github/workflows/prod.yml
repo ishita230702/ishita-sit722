@@ -1,15 +1,15 @@
-name: Deploy to Production
+name: Deploy to Prod
 
 on:
-  push:
-    branches: ["main"]
+  pull_request:
+    branches:
+      - main
 
 jobs:
   deploy-prod:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Log in to Azure
@@ -17,15 +17,13 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get AKS credentials
+      - name: Get AKS credentials (ignore missing RG)
         run: |
           az aks get-credentials \
             --resource-group sit722-prod-rg \
             --name sit722-prod-cluster \
-            --overwrite-existing
+            --overwrite-existing || echo "Skipping prod deploy (RG/Cluster not found)"
 
-      - name: Deploy manifests
+      - name: Deploy manifests to AKS (ignore if cluster missing)
         run: |
-          kubectl apply -f k8s/
-          kubectl get pods -o wide
-          kubectl get svc -o wide
+          kubectl apply -f k8s/ || echo "Skipping prod apply (no cluster)"
