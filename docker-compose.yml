@@ -1,0 +1,51 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: customers
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  customer_service:
+    build: ./backend/customer_service
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/customers
+    depends_on:
+      - postgres
+
+  order_service:
+    build: ./backend/order_service
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/orders
+    depends_on:
+      - postgres
+
+  product_service:
+    build: ./backend/product_service
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/products
+    depends_on:
+      - postgres
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - customer_service
+      - order_service
+      - product_service
+
+volumes:
+  postgres_data:
