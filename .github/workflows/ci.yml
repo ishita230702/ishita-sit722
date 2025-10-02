@@ -33,23 +33,24 @@ jobs:
         with:
           python-version: "3.9"
 
-      # Install deps & run tests for each service
-      - name: Install dependencies & run tests (Customer Service)
+      # Customer Service
+      - name: Install dependencies (Customer Service)
         run: |
           pip install -r backend/customer_service/requirements.txt
-          pytest backend/customer_service/tests
+          pip install pytest
 
-      - name: Install dependencies & run tests (Order Service)
+      # Order Service
+      - name: Install dependencies (Order Service)
         run: |
           pip install -r backend/order_service/requirements.txt
-          pytest backend/order_service/tests
+          pip install pytest
 
-      - name: Install dependencies & run tests (Product Service)
+      # Product Service
+      - name: Install dependencies (Product Service)
         run: |
           pip install -r backend/product_service/requirements.txt
-          pytest backend/product_service/tests
+          pip install pytest
 
-      # Ensure DBs exist for tests
       - name: Ensure test databases exist
         run: |
           sudo apt-get install -y postgresql-client
@@ -59,25 +60,33 @@ jobs:
         env:
           PGPASSWORD: postgres
 
-      # Login to Azure using GitHub secret
-      - name: Azure Login
+      - name: Run Customer Service tests
+        run: pytest backend/customer_service/tests
+
+      - name: Run Order Service tests
+        run: pytest backend/order_service/tests
+
+      - name: Run Product Service tests
+        run: pytest backend/product_service/tests
+
+      # ✅ Azure Login
+      - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
-      # Login to ACR
-      - name: Azure Container Registry Login
+      # ✅ Build & Push Docker Images
+      - name: Build and Push Docker images
         run: |
           az acr login --name sit722acr09ishita2505
-
-      # Build & push images
-      - name: Build and Push Docker Images
-        run: |
           docker build -t sit722acr09ishita2505.azurecr.io/customer-service:latest backend/customer_service
-          docker push sit722acr09ishita2505.azurecr.io/customer-service:latest
-
           docker build -t sit722acr09ishita2505.azurecr.io/order-service:latest backend/order_service
-          docker push sit722acr09ishita2505.azurecr.io/order-service:latest
-
           docker build -t sit722acr09ishita2505.azurecr.io/product-service:latest backend/product_service
+          docker build -t sit722acr09ishita2505.azurecr.io/frontend:latest frontend
+          docker push sit722acr09ishita2505.azurecr.io/customer-service:latest
+          docker push sit722acr09ishita2505.azurecr.io/order-service:latest
           docker push sit722acr09ishita2505.azurecr.io/product-service:latest
+          docker push sit722acr09ishita2505.azurecr.io/frontend:latest
