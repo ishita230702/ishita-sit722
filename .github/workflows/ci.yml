@@ -1,4 +1,4 @@
-name: CI Pipeline - Build and Push to ACR
+name: CI Pipeline - Build, Test and Push to ACR
 
 on:
   push:
@@ -35,9 +35,10 @@ jobs:
 
     - name: Install test dependencies
       run: |
-        pip install -r backend/customer_service/requirements-dev.txt
-        pip install -r backend/order_service/requirements-dev.txt
-        pip install -r backend/product_service/requirements-dev.txt
+        pip install -r backend/customer_service/requirements.txt
+        pip install -r backend/order_service/requirements.txt
+        pip install -r backend/product_service/requirements.txt
+        pip install pytest
 
     - name: Run backend tests
       env:
