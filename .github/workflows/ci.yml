@@ -15,7 +15,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
+          POSTGRES_DB: customers   # default DB created
         ports:
           - 5432:5432
         options: >-
@@ -28,33 +28,32 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Cache pip
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
+
+    # 🔹 Create required extra DBs (orders, products)
+    - name: Create additional databases
+      run: |
+        psql -h localhost -U postgres -d customers -c "CREATE DATABASE orders;"
+        psql -h localhost -U postgres -d customers -c "CREATE DATABASE products;"
+      env:
+        PGPASSWORD: postgres
 
     - name: Install test dependencies
       run: |
         pip install -r backend/customer_service/requirements-dev.txt
         pip install -r backend/order_service/requirements-dev.txt
         pip install -r backend/product_service/requirements-dev.txt
-        pip install pytest sqlalchemy psycopg2-binary
 
     - name: Run backend tests
       env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/customers
       run: |
-        pytest backend/customer_service/tests -v --maxfail=1 --disable-warnings
-        pytest backend/order_service/tests -v --maxfail=1 --disable-warnings
-        pytest backend/product_service/tests -v --maxfail=1 --disable-warnings
+        pytest backend/customer_service/tests
+        pytest backend/order_service/tests
+        pytest backend/product_service/tests
 
     - name: Log in to ACR
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
