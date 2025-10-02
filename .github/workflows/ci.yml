@@ -1,9 +1,10 @@
-name: CI Pipeline - Build, Test and Push to ACR
+name: CI
 
 on:
   push:
-    branches:
-      - testing
+    branches: [ "main", "testing" ]
+  pull_request:
+    branches: [ "main", "testing" ]
 
 jobs:
   build-test-push:
@@ -15,7 +16,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: customers
+          POSTGRES_DB: customers   # default DB for startup
         ports:
           - 5432:5432
         options: >-
@@ -33,40 +34,32 @@ jobs:
       with:
         python-version: '3.9'
 
-    - name: Install test dependencies
+    - name: Install dependencies
       run: |
         pip install -r backend/customer_service/requirements.txt
         pip install -r backend/order_service/requirements.txt
         pip install -r backend/product_service/requirements.txt
         pip install pytest
 
-    - name: Run backend tests
+    - name: Create test databases
+      run: |
+        sudo apt-get install -y postgresql-client
+        # Create missing DBs for all services
+        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE customers;"
+        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE orders;"
+        PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE products;"
+
+    - name: Run Customer Service tests
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/customers
-      run: |
-        pytest backend/customer_service/tests
-        pytest backend/order_service/tests
-        pytest backend/product_service/tests
+      run: pytest backend/customer_service/tests
 
-    - name: Log in to ACR
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+    - name: Run Order Service tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orders
+      run: pytest backend/order_service/tests
 
-    - name: Build and Push Customer Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest ./backend/customer_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest
-
-    - name: Build and Push Order Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest ./backend/order_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/order-service:latest
-
-    - name: Build and Push Product Service
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest ./backend/product_service
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/product-service:latest
-
-    - name: Build and Push Frontend
-      run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./frontend
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
+    - name: Run Product Service tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/products
+      run: pytest backend/product_service/tests
