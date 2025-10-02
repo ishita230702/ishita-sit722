@@ -3,17 +3,31 @@ name: CI Pipeline - Build and Push to ACR
 on:
   push:
     branches:
-      - testing   # Trigger only when code is pushed to 'testing' branch
+      - testing
 
 jobs:
   build-test-push:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customers
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Setup Python for backend tests
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -25,17 +39,17 @@ jobs:
         pip install -r backend/order_service/requirements-dev.txt
         pip install -r backend/product_service/requirements-dev.txt
 
-    - name: Run tests
+    - name: Run backend tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/customers
       run: |
         pytest backend/customer_service/tests
         pytest backend/order_service/tests
         pytest backend/product_service/tests
 
-    # Login to Azure Container Registry (ACR)
     - name: Log in to ACR
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
 
-    # Build & push images
     - name: Build and Push Customer Service
       run: |
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer-service:latest ./backend/customer_service
