@@ -1,62 +1,56 @@
-name: Staging Deployment
+name: Deploy to Staging
 
 on:
-  workflow_run:
-    workflows: ["CI Pipeline"]   # Must match CI pipeline name
-    types:
-      - completed
+  push:
+    branches:
+      - staging
 
 jobs:
-  deploy-to-staging:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Login to Azure
-        uses: azure/login@v2
+      - name: Log in to Azure
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Staging
+      - name: Upgrade Azure CLI
         run: |
-          echo "Deploying Docker images to staging environment..."
-          az group create --name sit722-staging-rg --location australiaeast
+          sudo az upgrade --yes
+
+      - name: Create resource group
+        run: |
+          az group create \
+            --name sit722-staging-rg \
+            --location australiaeast
+
+      - name: Create AKS cluster
+        run: |
           az aks create \
             --resource-group sit722-staging-rg \
             --name sit722-staging-cluster \
             --node-count 1 \
-            --vm-set-type VirtualMachineScaleSets \
-            --node-vm-size Standard_B2s \ 
-            --generate-ssh-keys \
+            --node-vm-size Standard_B2s \
+            --enable-managed-identity \
+            --generate-ssh-keys
+
+      - name: Attach ACR to AKS
+        run: |
+          az aks update \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-cluster \
             --attach-acr sit722acrishita
 
-          az aks get-credentials --resource-group sit722-staging-rg --name sit722-staging-cluster
-
-          # ✅ Inline dummy manifest so kubectl apply doesn’t fail
-          cat <<EOF | kubectl apply -f -
-          apiVersion: v1
-          kind: Pod
-          metadata:
-            name: test-nginx
-          spec:
-            containers:
-            - name: nginx
-              image: nginx:latest
-              ports:
-              - containerPort: 80
-          EOF
-
-      - name: Run Acceptance Tests
+      - name: Get AKS credentials
         run: |
-          echo "Running simple smoke tests..."
-          kubectl get pods
-          kubectl get services || true
+          az aks get-credentials \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-cluster
 
-      - name: Destroy Staging Environment
-        if: always()
+      - name: Deploy Kubernetes manifests
         run: |
-          echo "Cleaning up staging environment..."
-          az group delete --name sit722-staging-rg --yes --no-wait
+          kubectl apply -f task10_2d/k8s/
