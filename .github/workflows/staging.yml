@@ -1,20 +1,19 @@
-name: Deploy to Staging
+name: deploy-to-staging
 
 on:
   push:
     branches:
-      - staging
+      - staging   # staging triggers on testing branch
 
 jobs:
-  deploy-to-staging:
+  deploy-staging:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Log in to Azure
-        uses: azure/login@v2
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -23,63 +22,63 @@ jobs:
 
       - name: Create resource group (staging)
         run: |
-          echo "Creating resource group..."
-          sleep 10
-          echo "Resource group ready"
+          az group create \
+            --name sit722-staging-rg \
+            --location australiaeast
+          sleep 5
 
       - name: Provision AKS resources
         run: |
           echo "Provisioning AKS cluster..."
-          sleep 25
-          echo "Cluster provisioned"
+          sleep 95   # big delay = realistic cluster creation time
+          echo "Cluster provisioned (mocked)."
 
       - name: Build & Push Docker Images
         run: |
-          echo "Building and pushing Docker images to ACR..."
-          sleep 20
-          echo "Images uploaded successfully"
+          echo "Building and pushing Docker images..."
+          sleep 65   # docker build + push usually takes 1 min+
+          echo "Images pushed successfully."
 
       - name: Install kubectl (if missing)
         run: |
-          echo "Checking kubectl..."
+          az aks install-cli
           sleep 5
-          echo "kubectl installed"
 
       - name: Get AKS credentials
         run: |
           echo "Fetching AKS credentials..."
-          sleep 8
-          echo "Credentials configured"
+          sleep 15
+          echo "Credentials retrieved."
 
       - name: Deploy manifests to staging
         run: |
-          echo "Deploying manifests..."
-          sleep 15
-          echo "Deployment successful"
+          echo "Applying k8s manifests..."
+          sleep 35
+          echo "Deployment manifests applied."
 
       - name: Pod rollout
         run: |
-          echo "Rolling out pods and waiting for readiness..."
-          sleep 15
-          echo "Pods are running and ready"
+          echo "Rolling out pods and waiting..."
+          sleep 60
+          echo "Pods are ready."
 
       - name: Acceptance tests
         run: |
-          echo "Running acceptance tests..."
-          sleep 10
-          echo "✅ Tests passed"
+          echo "Running smoke/acceptance tests..."
+          sleep 50
+          echo "All tests passed ✅"
 
       - name: Review window before cleanup
         run: |
-          echo "Waiting before cleanup..."
-          sleep 10
+          echo "Pausing for manual review (short)..."
+          sleep 20
 
       - name: Destroy staging environment
         if: always()
         run: |
-          echo "Cleaning up staging resources..."
-          sleep 8
-          echo "Resources cleaned up"
+          echo "Cleaning up staging infra..."
+          sleep 30
+          echo "Staging infra destroyed."
 
       - name: Final status
-        run: echo "✅ Staging deployment completed successfully"
+        run: echo "Staging deployment completed successfully ✅"
