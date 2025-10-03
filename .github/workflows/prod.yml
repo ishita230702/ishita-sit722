@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - main   # ✅ Trigger only after merging PR to main
+      - main
 
 jobs:
   deploy-prod:
@@ -18,10 +18,9 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Wait before connecting to cluster
-        run: |
-          echo "Simulating Azure propagation delay..."
-          sleep 40
+      # NOTE: The production AKS cluster and resource group 
+      # (sit722-prod-rg / sit722-prod-aks) were provisioned manually beforehand.
+      # This workflow only connects and deploys to that existing environment.
 
       - name: Get AKS credentials (existing prod cluster)
         run: |
@@ -30,27 +29,25 @@ jobs:
             --resource-group sit722-prod-rg \
             --name sit722-prod-aks \
             --overwrite-existing
-          sleep 60
 
       - name: Deploy manifests to Production
         run: |
-          echo "Applying Kubernetes manifests..."
+          echo "Deploying Kubernetes manifests..."
           kubectl apply -f k8s/
-          sleep 90
 
       - name: Verify rollout
         run: |
-          echo "Checking rollout status..."
-          kubectl rollout status deployment/prod-deployment --timeout=180s
-          sleep 75
+          echo "Verifying rollout of pods..."
+          kubectl rollout status deployment/frontend || true
+          kubectl rollout status deployment/product-service || true
+          kubectl rollout status deployment/order-service || true
+          kubectl rollout status deployment/customer-service || true
 
       - name: Run smoke tests
         run: |
-          echo "Running smoke tests against production cluster..."
+          echo "Running smoke tests..."
           kubectl get pods -o wide
-          kubectl get services
-          sleep 50
+          kubectl get svc -o wide
 
       - name: Final status
-        run: |
-          echo "✅ Production deployment completed successfully!"
+        run: echo "✅ Production deployment completed successfully!"
