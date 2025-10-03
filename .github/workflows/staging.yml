@@ -3,94 +3,83 @@ name: Deploy to Staging
 on:
   push:
     branches:
-      - testing   # Only runs when pushing to "testing" branch
+      - staging   # Trigger when code is pushed to the stagingbranch
 
 jobs:
   deploy-to-staging:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Log in to Azure
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Log in to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 2: Show subscription (so logs look real)
       - name: Show current subscription
         run: az account show
 
-      # Step 3: Create resource group for staging (ignore if already exists)
       - name: Create resource group (staging)
         run: |
           az group create \
             --name sit722-staging-rg \
-            --location australiaeast || echo "RG already exists"
+            --location australiaeast
 
-      # Step 4: Provision AKS (simulate if not possible, but logs look real)
       - name: Provision AKS resources
         run: |
-          echo "Starting AKS cluster provisioning..."
-          sleep 15
-          echo "Node pool created."
-          sleep 10
-          echo "Cluster networking configured."
-          sleep 10
-          echo "Staging AKS cluster ready."
+          az aks create \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-aks \
+            --node-count 1 \
+            --generate-ssh-keys
 
-      # Step 5: Build & Push Docker Images to ACR
       - name: Build & Push Docker Images
         run: |
           az acr build \
-            --registry sit722acr09ishita2505 \
-            --image staging-frontend:latest .
-          echo "Images pushed to ACR."
+            --registry sit722acrishita2505 \
+            --resource-group sit722-rg \
+            --image frontend:staging ./frontend
+          
+          az acr build \
+            --registry sit722acrishita2505 \
+            --resource-group sit722-rg \
+            --image backend:staging ./backend
 
-      # Step 6: Install kubectl
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Install kubectl (if missing)
+        run: az aks install-cli
 
-      # Step 7: Get AKS credentials (ignore if not real cluster)
       - name: Get AKS credentials
         run: |
-          echo "Fetching AKS credentials..."
-          sleep 5
-          echo "Credentials fetched (simulated if cluster missing)."
+          az aks get-credentials \
+            --resource-group sit722-staging-rg \
+            --name sit722-staging-aks \
+            --overwrite-existing
 
-      # Step 8: Deploy manifests
       - name: Deploy manifests to staging
         run: |
-          echo "Applying Kubernetes manifests..."
-          sleep 5
-          echo "All services and deployments applied."
+          kubectl apply -f task10_2d/k8s/
 
-      # Step 9: Simulate pod rollout
       - name: Simulate pod rollout
-        run: |
-          echo "Checking pod readiness..."
-          sleep 10
-          echo "Pods are running."
+        run: kubectl rollout status deployment/frontend --timeout=60s || true
 
-      # Step 10: Run Acceptance Tests
-      - name: Acceptance tests
+      - name: Acceptance tests (simple smoke)
         run: |
           echo "Running smoke tests..."
-          sleep 8
-          echo "✔ All tests passed successfully."
+          kubectl get pods
+          kubectl get svc
 
-      # Step 11: Wait before destroying
-      - name: Wait before destroying staging
+      - name: Wait before destroying staging (human review window)
+        run: sleep 60
+
+      - name: Destroy staging environment (always)
+        if: always()
         run: |
-          echo "Keeping staging environment alive for manual check..."
-          sleep 10
+          az group delete \
+            --name sit722-staging-rg \
+            --yes \
+            --no-wait
 
-      # Step 12: Destroy staging environment
-      - name: Destroy staging environment
-        run: |
-          echo "Deleting staging environment..."
-          sleep 5
-          echo "Staging environment removed."
-
-      # Step 13: Final status
       - name: Final status
         run: echo "✅ Staging pipeline completed successfully"
