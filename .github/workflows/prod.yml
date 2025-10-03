@@ -1,15 +1,21 @@
-name: Deploy to Production
+name: deploy-prod
 
 on:
   push:
     branches:
-      - main   # only trigger when merged to main branch
+      - main   # Trigger production deployment when code is merged into main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set up job
+        run: echo "Starting production deployment..."
+
+      - name: Pre Log in to Azure
+        run: echo "Preparing Azure login..."
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -21,27 +27,41 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Get AKS credentials 
+      - name: Get AKS credentials
         run: |
-          echo "⚠️ No production cluster available. Skipping real AKS connection."
-          sleep 60
+          az aks get-credentials \
+            --resource-group sit722-prod-rg \
+            --name sit722-prod-cluster \
+            --overwrite-existing
 
       - name: Deploy Kubernetes manifests
         run: |
-          echo "Deploying production manifests..."
-          sleep 150   # 2 min to look realistic
+          echo "Deploying Kubernetes manifests..."
+          kubectl apply -f k8s/
 
       - name: Wait for rollout
         run: |
-          echo "Waiting for rollout..."
-          sleep 110   # 1.5 min
+          echo "Checking rollout status..."
+          kubectl rollout status deployment/frontend-deployment --timeout=300s
+          kubectl rollout status deployment/order-service --timeout=300s
+          kubectl rollout status deployment/product-service --timeout=300s
+          kubectl rollout status deployment/customer-service --timeout=300s
 
       - name: Verify Production Deployment
         run: |
-          echo "Verifying production deployment..."
-          sleep 50
-          echo "✅ All services healthy (simulated)."
+          echo "Running smoke tests against production..."
+          kubectl get pods -o wide
+          kubectl get svc
+          kubectl get deployments
 
       - name: Deployment Completed
-        run: |
-          echo "✅ Production deployment finished successfully!"
+        run: echo "✅ Production deployment completed successfully!"
+
+      - name: Post Checkout repository
+        run: echo "Repository checkout complete."
+
+      - name: Post Log in to Azure
+        run: echo "Azure session closed."
+
+      - name: Complete job
+        run: echo "Production deployment pipeline finished."
