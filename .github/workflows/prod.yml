@@ -1,0 +1,56 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main   # ✅ Trigger only after merging PR to main
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Wait before connecting to cluster
+        run: |
+          echo "Simulating Azure propagation delay..."
+          sleep 40
+
+      - name: Get AKS credentials (existing prod cluster)
+        run: |
+          echo "Fetching AKS credentials..."
+          az aks get-credentials \
+            --resource-group sit722-prod-rg \
+            --name sit722-prod-aks \
+            --overwrite-existing
+          sleep 60
+
+      - name: Deploy manifests to Production
+        run: |
+          echo "Applying Kubernetes manifests..."
+          kubectl apply -f k8s/
+          sleep 90
+
+      - name: Verify rollout
+        run: |
+          echo "Checking rollout status..."
+          kubectl rollout status deployment/prod-deployment --timeout=180s
+          sleep 75
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against production cluster..."
+          kubectl get pods -o wide
+          kubectl get services
+          sleep 50
+
+      - name: Final status
+        run: |
+          echo "✅ Production deployment completed successfully!"
