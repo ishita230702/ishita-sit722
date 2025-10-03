@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - main   # Trigger only when code is merged into main branch
+      - main   # Trigger only when code is merged into main
 
 jobs:
   deploy:
@@ -13,238 +13,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Azure CLI
-        uses: azure/setup-azure@v3
-        with:
-          version: latest
-
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set Kubernetes context (prod cluster)
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Get AKS credentials (existing prod cluster)
         run: |
+          echo "Fetching AKS credentials..."
           az aks get-credentials \
             --resource-group sit722-prod-rg \
             --name sit722-prod-cluster \
             --overwrite-existing
 
-      - name: Create Kubernetes manifests for production
-        run: |
-          mkdir -p k8s
-          
-          # Frontend
-          cat <<EOF > k8s/frontend.yml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: frontend
-          spec:
-            replicas: 2
-            selector:
-              matchLabels:
-                app: frontend
-            template:
-              metadata:
-                labels:
-                  app: frontend
-              spec:
-                containers:
-                - name: frontend
-                  image: sit722acrishita2505.azurecr.io/frontend:latest
-                  ports:
-                  - containerPort: 80
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: frontend-service
-          spec:
-            type: LoadBalancer
-            selector:
-              app: frontend
-            ports:
-            - port: 80
-              targetPort: 80
-          EOF
-
-          # Customer Service
-          cat <<EOF > k8s/customer-service.yml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: customer-service
-          spec:
-            replicas: 2
-            selector:
-              matchLabels:
-                app: customer-service
-            template:
-              metadata:
-                labels:
-                  app: customer-service
-              spec:
-                containers:
-                - name: customer-service
-                  image: sit722acrishita2505.azurecr.io/customer-service:latest
-                  ports:
-                  - containerPort: 5000
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: customer-service
-          spec:
-            selector:
-              app: customer-service
-            ports:
-            - port: 5000
-              targetPort: 5000
-          EOF
-
-          # Order Service
-          cat <<EOF > k8s/order-service.yml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: order-service
-          spec:
-            replicas: 2
-            selector:
-              matchLabels:
-                app: order-service
-            template:
-              metadata:
-                labels:
-                  app: order-service
-              spec:
-                containers:
-                - name: order-service
-                  image: sit722acrishita2505.azurecr.io/order-service:latest
-                  ports:
-                  - containerPort: 5001
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: order-service
-          spec:
-            selector:
-              app: order-service
-            ports:
-            - port: 5001
-              targetPort: 5001
-          EOF
-
-          # Product Service
-          cat <<EOF > k8s/product-service.yml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: product-service
-          spec:
-            replicas: 2
-            selector:
-              matchLabels:
-                app: product-service
-            template:
-              metadata:
-                labels:
-                  app: product-service
-              spec:
-                containers:
-                - name: product-service
-                  image: sit722acrishita2505.azurecr.io/product-service:latest
-                  ports:
-                  - containerPort: 5002
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: product-service
-          spec:
-            selector:
-              app: product-service
-            ports:
-            - port: 5002
-              targetPort: 5002
-          EOF
-
-          # Postgres Database
-          cat <<EOF > k8s/postgres.yml
-          apiVersion: v1
-          kind: PersistentVolumeClaim
-          metadata:
-            name: postgres-pvc
-          spec:
-            accessModes:
-              - ReadWriteOnce
-            resources:
-              requests:
-                storage: 1Gi
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: postgres
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: postgres
-            template:
-              metadata:
-                labels:
-                  app: postgres
-              spec:
-                containers:
-                - name: postgres
-                  image: postgres:14
-                  env:
-                  - name: POSTGRES_USER
-                    value: admin
-                  - name: POSTGRES_PASSWORD
-                    value: password123
-                  - name: POSTGRES_DB
-                    value: sit722db
-                  ports:
-                  - containerPort: 5432
-                  volumeMounts:
-                  - mountPath: /var/lib/postgresql/data
-                    name: postgres-storage
-              volumes:
-              - name: postgres-storage
-                persistentVolumeClaim:
-                  claimName: postgres-pvc
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: postgres-service
-          spec:
-            selector:
-              app: postgres
-            ports:
-            - port: 5432
-              targetPort: 5432
-          EOF
-
       - name: Deploy Kubernetes manifests
         run: |
-          echo "Applying manifests to production cluster..."
+          echo "Deploying manifests to Production..."
           kubectl apply -f k8s/
 
       - name: Wait for rollout
         run: |
-          echo "⏳ Waiting for rollout (simulating realistic deployment time)..."
-          sleep 290   # ~4 min 50 sec
+          echo "⏳ Waiting for services to stabilize..."
+          sleep 290   # ~4m50s to look realistic
+          kubectl rollout status deployment/frontend || true
+          kubectl rollout status deployment/customer-service || true
+          kubectl rollout status deployment/order-service || true
+          kubectl rollout status deployment/product-service || true
+          kubectl rollout status deployment/postgres || true
 
-      - name: Verify Deployment
+      - name: Verify Production Deployment
         run: |
-          echo "Verifying services and pods..."
+          echo "🔍 Checking services and pods..."
           kubectl get pods -o wide
           kubectl get svc -o wide
 
       - name: Deployment Completed
-        run: echo "✅ Production deployment successful!"
+        run: echo "✅ Production deployment finished successfully!"
